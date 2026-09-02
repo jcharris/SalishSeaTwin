@@ -1,0 +1,25 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": { "type": "Point", "coordinates": [-123.35, 48.55] },
+      "properties": { "id": "node-1", "name": "Haro Deep", "type": "shred_input" }
+    },
+    {
+      "type": "Feature",
+      "geometry": { "type": "Point", "coordinates": [-123.10, 48.50] },
+      "properties": { "id": "node-2", "name": "San Juan Array", "type": "shred_input" }
+    },
+    {
+      "type": "Feature",
+      "geometry": { "type": "Point", "coordinates": [-123.40, 48.35] },
+      "properties": { "id": "node-3", "name": "Victoria Sill", "type": "info" }
+    },
+    {
+      "type": "Feature",
+      "geometry": { "type": "Point", "coordinates": [-123.20, 48.65] },
+      "properties": { "id": "node-4", "name": "Active Pass", "type": "shred_output" }
+    }
+  ]
+}

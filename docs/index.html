@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Salish Sea DT</title>
+  
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#020617">
+
+  <script src="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js"></script>
+  <link href="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css" rel="stylesheet" />
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <div id="ui-panel">
+  <h3>Salish Sea Digital Twin</h3>
+  <p>Developed by <strong>Jeffrey Harris / ENPC</strong></p>
+  <p id="layer-status" style="color: #38bdf8; margin-top: 4px;">Active Layer: Temperature (°C)</p>
+  </div>
+
+  <div id="map"></div>
+
+  <!-- Variable Switcher -->
+  <div id="variable-selector">
+    <button class="var-btn active" data-var="temperature">Temp</button>
+    <button class="var-btn" data-var="salinity">Salinity</button>
+    <button class="var-btn" data-var="velocity">Velocity</button>
+  </div>
+
+  <!-- Bottom Time Control Dock -->
+  <div id="time-controller">
+    <div class="range-header">
+      <span class="range-label">Dataset: Sep 1 – Sep 3 (Hourly)</span>
+      <input type="datetime-local" id="exact-picker" class="exact-picker"
+             step="3600" min="2026-09-01T00:00" max="2026-09-03T23:00" value="2026-09-01T00:00">
+    </div>
+
+    <div class="slider-row">
+      <button class="play-btn" id="play-btn">▶</button>
+      <input type="range" id="time-slider" class="time-slider" min="0" max="71" step="1" value="0">
+    </div>
+
+    <div class="time-readout" id="time-readout">2026-09-01 00:00 UTC</div>
+  </div>
+
+  <!-- Contextual Chart Drawer -->
+  <div id="chart-drawer">
+    <div class="drawer-header">
+      <div>
+        <div class="drawer-title" id="sensor-title">Node Telemetry</div>
+        <div class="drawer-sub" id="sensor-meta">Water Temp (°C)</div>
+      </div>
+      <button class="close-btn" id="close-drawer">✕</button>
+    </div>
+    
+    <div class="chart-box" id="chart-box">
+      <svg class="chart-svg" id="chart-svg" viewBox="0 0 300 100" preserveAspectRatio="none">
+        <line x1="0" y1="25" x2="300" y2="25" stroke="rgba(255,255,255,0.08)" stroke-dasharray="2,2"/>
+        <line x1="0" y1="50" x2="300" y2="50" stroke="rgba(255,255,255,0.08)" stroke-dasharray="2,2"/>
+        <line x1="0" y1="75" x2="300" y2="75" stroke="rgba(255,255,255,0.08)" stroke-dasharray="2,2"/>
+        
+        <path id="chart-path" d="" fill="none" stroke="#38bdf8" stroke-width="2.5" />
+        <line id="scrub-line" x1="0" y1="0" x2="0" y2="100" stroke="#f43f5e" stroke-width="2" />
+        <circle id="scrub-dot" cx="0" cy="0" r="4" fill="#f43f5e" />
+      </svg>
+    </div>
+  </div>
+
+  <!-- App Modules -->
+  <script src="js/map.js"></script>
+  <script src="js/time-controller.js"></script>
+  <script src="js/chart.js"></script>
+  <script src="js/app.js"></script>
+
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('sw.js');
+    }
+  </script>
+<!-- Floating Update Banner -->
+<div id="update-toast" style="
+  display: none; position: absolute; top: 15px; left: 50%; transform: translateX(-50%);
+  z-index: 100; background: #0284c7; color: white; padding: 8px 16px; border-radius: 20px;
+  font-size: 11px; font-weight: 600; box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+  cursor: pointer; backdrop-filter: blur(8px); border: 1px solid rgba(255,255,255,0.3);
+">
+  ✨ Update Available! Tap to Refresh
+</div>
+</body>
+</html>
