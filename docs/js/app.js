@@ -1,84 +1,103 @@
-if ('serviceWorker' in navigator) {
-  let newWorker;
+import { DataModule } from './data-module.js';
+import { ChartModule } from './chart-module.js';
+import { TimeController } from './time-controller.js';
+import { MapManager } from './map.js';
 
-  navigator.serviceWorker.register('sw.js').then((reg) => {
-    reg.addEventListener('updatefound', () => {
-      newWorker = reg.installing;
-
-      newWorker.addEventListener('statechange', () => {
-        if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-          // New version is ready! Show the update banner
-          const toast = document.getElementById('update-toast');
-          if (toast) {
-            toast.style.display = 'block';
-            toast.addEventListener('click', () => {
-              newWorker.postMessage('SKIP_WAITING');
-            });
-          }
-        }
-      });
-    });
-  });
-
-  // Reload the page once the new service worker takes over
-  let refreshing = false;
-  navigator.serviceWorker.addEventListener('controllerchange', () => {
-    if (!refreshing) {
-      refreshing = true;
-      window.location.reload();
-    }
-  });
-}
-
-let appState = {
-  currentVariable: 'temperature',
-  selectedNode: null,
-  currentHour: 0,
-  telemetry: null
+// Application State
+const appState = {
+  currentVariable: 'twl',
+  selectedNodeId: 'SS_SEATTLE',
+  currentHour: 0
 };
 
-const units = { temperature: '°C', salinity: 'PSU', velocity: 'kts' };
+// Variable Metadata
+const variableUnits = {
+  twl: 'm',
+  tide: 'm',
+  surge: 'm',
+  temp: '°C',
+  salinity: 'PSU'
+};
 
+const variableLabels = {
+  twl: 'Total Water Level',
+  tide: 'Predicted Tide',
+  surge: 'Storm Surge',
+  temp: 'Water Temperature',
+  salinity: 'Salinity'
+};
+
+// Instantiated Modules
+const dataModule = new DataModule();
+const chartModule = new ChartModule('chart-box'); // Drawer container ID in index.html
+const mapManager = new MapManager('map');
+let timeController = null;
+
+/**
+ * Main Application Startup Sequence
+ */
 document.addEventListener('DOMContentLoaded', async () => {
-  // Load Telemetry Data
-  const res = await fetch('data/telemetry.json');
-  appState.telemetry = await res.json();
+  // 1. Fetch sensor metadata and telemetry datasets
+  await dataModule.initialize();
 
-  // Initialize Modules
-  const chart = new ChartDrawer((targetHour) => {
-    timeCtrl.sync(targetHour, 'chart');
+  // 2. Initialize Time Controller
+  timeController = new TimeController((hour) => {
+    appState.currentHour = hour;
+    chartModule.updateCursor(hour);
   });
 
-  const timeCtrl = new TimeController(
-    appState.telemetry.start_time,
-    appState.telemetry.total_hours,
-    (hour) => {
-      appState.currentHour = hour;
-      chart.updateCursor(hour);
-    }
-  );
-
-  const mapMgr = new MapManager('map');
-  mapMgr.loadSensors((nodeProps) => {
-    appState.selectedNode = nodeProps;
-    const nodeData = appState.telemetry.nodes[nodeProps.id][appState.currentVariable];
-    chart.render(nodeProps, appState.currentVariable, nodeData, units[appState.currentVariable]);
+  // 3. Initialize Map with Sensor GeoJSON and click callback
+  const initialGeoJSON = dataModule.getSensorsGeoJSON(appState.currentVariable);
+  mapManager.init(initialGeoJSON, (sensorId) => {
+    appState.selectedNodeId = sensorId;
+    updateChart();
   });
 
-  // Variable Selector Handler
-  document.querySelectorAll('.var-btn').forEach(btn => {
+  // 4. Bind Variable Switcher Buttons
+  setupVariableSelectors();
+
+  // 5. Render Initial Chart
+  updateChart();
+});
+
+/**
+ * Refresh Chart Drawer View
+ */
+function updateChart() {
+  const series = dataModule.getSeries(appState.selectedNodeId, appState.currentVariable);
+  const unit = variableUnits[appState.currentVariable] || '';
+  const label = variableLabels[appState.currentVariable] || appState.currentVariable.toUpperCase();
+
+  // Render SVG Chart inside #chart-box
+  chartModule.render(series, appState.selectedNodeId, label, unit);
+  chartModule.updateCursor(appState.currentHour);
+}
+
+/**
+ * Attach Event Handlers to Variable Selector Buttons
+ */
+function setupVariableSelectors() {
+  const buttons = document.querySelectorAll('.var-btn');
+  buttons.forEach(btn => {
     btn.addEventListener('click', (e) => {
-      document.querySelectorAll('.var-btn').forEach(b => b.classList.remove('active'));
+      // Toggle active CSS class
+      buttons.forEach(b => b.classList.remove('active'));
       e.target.classList.add('active');
 
+      // Update state variable key
       appState.currentVariable = e.target.dataset.var;
-      document.getElementById('layer-status').textContent = 
-        `Active Layer: ${appState.currentVariable.toUpperCase()} (${units[appState.currentVariable]})`;
 
-      if (appState.selectedNode) {
-        const nodeData = appState.telemetry.nodes[appState.selectedNode.id][appState.currentVariable];
-        chart.render(appState.selectedNode, appState.currentVariable, nodeData, units[appState.currentVariable]);
-      }
+      // Update HUD status label
+      const unit = variableUnits[appState.currentVariable] || '';
+      const label = variableLabels[appState.currentVariable] || appState.currentVariable;
+      document.getElementById('layer-status').textContent = `Active Layer: ${label} (${unit})`;
+
+      // Update map nodes (dims nodes that don't support this variable)
+      const updatedGeoJSON = dataModule.getSensorsGeoJSON(appState.currentVariable);
+      mapManager.updateSensors(updatedGeoJSON);
+
+      // Refresh Chart
+      updateChart();
     });
   });
-});
+}
