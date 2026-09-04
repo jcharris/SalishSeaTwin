@@ -101,3 +101,30 @@ function setupVariableSelectors() {
     });
   });
 }
+
+/**
+ * Registers Service Worker with automatic cache invalidation
+ */
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', async () => {
+    try {
+      const reg = await navigator.serviceWorker.register('./sw.js');
+
+      // Check for updates on every page load
+      reg.addEventListener('updatefound', () => {
+        const newWorker = reg.installing;
+        if (!newWorker) return;
+
+        newWorker.addEventListener('statechange', () => {
+          if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+            console.log('New update available! Reloading page...');
+            // Reload page to fetch updated scripts and cache
+            window.location.reload();
+          }
+        });
+      });
+    } catch (err) {
+      console.error('Service Worker registration failed:', err);
+    }
+  });
+}
