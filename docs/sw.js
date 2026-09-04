@@ -1,5 +1,4 @@
-// Change this version number whenever you deploy new code!
-const CACHE_NAME = 'salish-twin-v1.0.1';
+const CACHE_NAME = 'salish-twin-v1.0.2';
 
 const ASSETS = [
   './',
@@ -16,10 +15,16 @@ const ASSETS = [
 
 // Install: Cache core shell
 self.addEventListener('install', (event) => {
-  // Force new service worker to activate immediately without waiting
   self.skipWaiting();
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS))
+    caches.open(CACHE_NAME).then((cache) => {
+      // Use Promise.allSettled or fetch individual assets to prevent total failure
+      return Promise.all(
+        ASSETS.map(url => 
+          cache.add(url).catch(err => console.warn(`[SW] Failed to cache: ${url}`, err))
+        )
+      );
+    })
   );
 });
 
