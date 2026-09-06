@@ -12,41 +12,47 @@ export class MapManager {
    * @param {Function} onSelect - Callback function (sensorId) when a node is clicked
    */
   init(geoJsonData, onSelect) {
-    // 1. Instantiate Map inside init()
-    this.map = new maplibregl.Map({
-      container: this.containerId,
-      style: {
-        version: 8,
-        sources: {
-          'esri-ocean': {
-            type: 'raster',
-            tiles: ['https://server.arcgisonline.com/ArcGIS/rest/services/Ocean/World_Ocean_Base/MapServer/tile/{z}/{y}/{x}'],
-            tileSize: 256,
-            attribution: 'Tiles © Esri'
-          }
-        },
-        layers: [{ id: 'ocean-basemap', type: 'raster', source: 'esri-ocean' }]
+  this.map = new maplibregl.Map({
+    container: this.containerId,
+    style: {
+      version: 8,
+      sources: {
+        'esri-ocean': {
+          type: 'raster',
+          tiles: ['https://server.arcgisonline.com/ArcGIS/rest/services/Ocean/World_Ocean_Base/MapServer/tile/{z}/{y}/{x}'],
+          tileSize: 256,
+          attribution: 'Tiles © Esri'
+        }
       },
-      center: [-123.25, 48.50],
-      zoom: 9.5,
-      pitch: 40,
-      bearing: -10
-    });
+      layers: [{ id: 'ocean-basemap', type: 'raster', source: 'esri-ocean' }]
+    },
+    center: [-123.25, 48.50],
+    zoom: 9.5,
+    pitch: 40,
+    bearing: -10
+  });
 
-    this.map.addControl(new maplibregl.NavigationControl(), 'top-right');
+  this.map.addControl(new maplibregl.NavigationControl(), 'top-right');
 
-    // 2. Setup setupLayers helper
-    const setupLayers = () => {
-      if (this.isLoaded) return;
-      this.isLoaded = true;
+  const setupLayers = () => {
+    // Guard against running setup twice
+    if (this.isLoaded) return;
+    this.isLoaded = true;
 
-      // Add Sensor GeoJSON Source
+    const initialData = this.pendingGeoJSON || geoJsonData;
+
+    // 1. Safe Source Initialization
+    if (!this.map.getSource('sensors')) {
       this.map.addSource('sensors', {
         type: 'geojson',
-        data: this.pendingGeoJSON || geoJsonData
+        data: initialData || { type: 'FeatureCollection', features: [] }
       });
+    } else if (initialData) {
+      this.map.getSource('sensors').setData(initialData);
+    }
 
-      // Render Dynamic Circle Layer with Variable Dimming
+    // 2. Safe Layer Rendering
+    if (!this.map.getLayer('sensors-layer')) {
       this.map.addLayer({
         id: 'sensors-layer',
         type: 'circle',
@@ -55,14 +61,12 @@ export class MapManager {
           'circle-radius': 7,
           'circle-color': [
             'match', ['get', 'type'],
-            'shred_input', '#f43f5e',   // Coral red
-            'shred_output', '#10b981',  // Emerald green
-            '#38bdf8'                    // Cyan default
+            'shred_input', '#f43f5e',
+            'shred_output', '#10b981',
+            '#38bdf8'
           ],
           'circle-stroke-width': 2,
           'circle-stroke-color': '#ffffff',
-
-          // Dynamic Opacity: Active variable supported = 100%, unsupported = 25%
           'circle-opacity': [
             'match', ['get', 'isSupported'],
             1, 1.0,
@@ -75,32 +79,36 @@ export class MapManager {
           ]
         }
       });
-
-      // Pointer Cursor on Hover
-      this.map.on('mouseenter', 'sensors-layer', () => {
-        this.map.getCanvas().style.cursor = 'pointer';
-      });
-      
-      this.map.on('mouseleave', 'sensors-layer', () => {
-        this.map.getCanvas().style.cursor = '';
-      });
-
-      // Node Click Handler
-      this.map.on('click', 'sensors-layer', (e) => {
-        if (!e.features || e.features.length === 0) return;
-        const clickedSensorId = e.features[0].properties.id;
-        if (typeof onSelect === 'function') {
-          onSelect(clickedSensorId);
-        }
-      });
-    };
-
-    // 3. Attach load event, or run immediately if already loaded
-    if (this.map.isStyleLoaded()) {
-      setupLayers();
-    } else {
-      this.map.on('load', setupLayers);
     }
+
+    // 3. Hover & Click Listeners
+    this.map.on('mouseenter', 'sensors-layer', () => {
+      this.map.getCanvas().style.cursor = 'pointer';
+    });
+    
+    this.map.on('mouseleave', 'sensors-layer', () => {
+      this.map.getCanvas().style.cursor = '';
+    });
+
+    this.map.on('click', 'sensors-layer', (e) => {
+      if (!e.features || e.features.length === 0) return;
+      const clickedSensorId = e.features[0].properties.id;
+      if (typeof onSelect === 'function') {
+        onSelect(clickedSensorId);
+      }
+    });
+  };
+
+  // --- THE RACE CONDITION FIX ---
+  // If the map or style is ALREADY loaded (common on fast local refresh or cached loads),
+  // invoke setupLayers immediately instead of waiting for an event that already passed!
+  if (this.map.loaded() || this.map.isStyleLoaded()) {
+    setupLayers();
+  } else {
+    // Listen to both load and style.load to ensure execution regardless of style load order
+    this.map.once('load', setupLayers);
+    this.map.once('style.load', setupLayers);
+  }
   }
 
   /**
@@ -108,11 +116,10 @@ export class MapManager {
    * @param {Object} geoJsonData - Updated GeoJSON from DataModule
    */
   updateSensors(geoJsonData) {
+    this.pendingGeoJSON = geoJsonData;
+
     if (this.isLoaded && this.map && this.map.getSource('sensors')) {
       this.map.getSource('sensors').setData(geoJsonData);
-    } else {
-      // Store GeoJSON if variable switch occurs before map finishes loading
-      this.pendingGeoJSON = geoJsonData;
     }
   }
 }
