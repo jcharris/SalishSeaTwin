@@ -29,7 +29,7 @@ const variableLabels = {
 
 // Instantiated Modules
 const dataModule = new DataModule();
-const chartModule = new ChartModule('chart-box'); // Drawer container ID in index.html
+const chartModule = new ChartModule('chart-box');
 const mapManager = new MapManager('map');
 let timeController = null;
 
@@ -37,27 +37,39 @@ let timeController = null;
  * Main Application Startup Sequence
  */
 document.addEventListener('DOMContentLoaded', async () => {
-  // 1. Fetch sensor metadata and telemetry datasets
-  await dataModule.initialize();
+  try {
+    // 1. Fetch sensor metadata and telemetry datasets FIRST
+    await dataModule.initialize();
 
-  // 2. Initialize Time Controller
-  timeController = new TimeController((hour) => {
-    appState.currentHour = hour;
-    chartModule.updateCursor(hour);
-  });
+    // 2. Safely extract initial GeoJSON
+    const initialGeoJSON = dataModule.getSensorsGeoJSON(appState.currentVariable);
+    
+    // Fallback log if features are empty
+    if (!initialGeoJSON || !initialGeoJSON.features || initialGeoJSON.features.length === 0) {
+      console.warn('[App] Warning: GeoJSON has zero features on boot!');
+    }
 
-  // 3. Initialize Map with Sensor GeoJSON and click callback
-  const initialGeoJSON = dataModule.getSensorsGeoJSON(appState.currentVariable);
-  mapManager.init(initialGeoJSON, (sensorId) => {
-    appState.selectedNodeId = sensorId;
+    // 3. Initialize Map with Sensor GeoJSON and click callback
+    mapManager.init(initialGeoJSON, (sensorId) => {
+      appState.selectedNodeId = sensorId;
+      updateChart();
+    });
+
+    // 4. Initialize Time Controller
+    timeController = new TimeController((hour) => {
+      appState.currentHour = hour;
+      chartModule.updateCursor(hour);
+    });
+
+    // 5. Bind Variable Switcher Buttons
+    setupVariableSelectors();
+
+    // 6. Render Initial Chart
     updateChart();
-  });
 
-  // 4. Bind Variable Switcher Buttons
-  setupVariableSelectors();
-
-  // 5. Render Initial Chart
-  updateChart();
+  } catch (err) {
+    console.error('[App] Critical startup failure:', err);
+  }
 });
 
 /**
@@ -68,7 +80,6 @@ function updateChart() {
   const unit = variableUnits[appState.currentVariable] || '';
   const label = variableLabels[appState.currentVariable] || appState.currentVariable.toUpperCase();
 
-  // Render SVG Chart inside #chart-box
   chartModule.render(series, appState.selectedNodeId, label, unit);
   chartModule.updateCursor(appState.currentHour);
 }
@@ -80,17 +91,23 @@ function setupVariableSelectors() {
   const buttons = document.querySelectorAll('.var-btn');
   buttons.forEach(btn => {
     btn.addEventListener('click', (e) => {
+      const target = e.currentTarget;
+
       // Toggle active CSS class
       buttons.forEach(b => b.classList.remove('active'));
-      e.target.classList.add('active');
+      target.classList.add('active');
 
       // Update state variable key
-      appState.currentVariable = e.target.dataset.var;
+      appState.currentVariable = target.dataset.var;
 
       // Update HUD status label
       const unit = variableUnits[appState.currentVariable] || '';
       const label = variableLabels[appState.currentVariable] || appState.currentVariable;
-      document.getElementById('layer-status').textContent = `Active Layer: ${label} (${unit})`;
+      
+      const statusEl = document.getElementById('layer-status');
+      if (statusEl) {
+        statusEl.textContent = `Active Layer: ${label} (${unit})`;
+      }
 
       // Update map nodes (dims nodes that don't support this variable)
       const updatedGeoJSON = dataModule.getSensorsGeoJSON(appState.currentVariable);
@@ -103,26 +120,12 @@ function setupVariableSelectors() {
 }
 
 /**
- * Registers Service Worker with automatic cache invalidation
+ * Safe Service Worker Registration (No Auto-Reload Loop)
  */
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', async () => {
     try {
-      const reg = await navigator.serviceWorker.register('./sw.js');
-
-      // Check for updates on every page load
-      reg.addEventListener('updatefound', () => {
-        const newWorker = reg.installing;
-        if (!newWorker) return;
-
-        newWorker.addEventListener('statechange', () => {
-          if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-            console.log('New update available! Reloading page...');
-            // Reload page to fetch updated scripts and cache
-            window.location.reload();
-          }
-        });
-      });
+      await navigator.serviceWorker.register('./sw.js');
     } catch (err) {
       console.error('Service Worker registration failed:', err);
     }

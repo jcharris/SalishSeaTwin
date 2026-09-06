@@ -12,103 +12,105 @@ export class MapManager {
    * @param {Function} onSelect - Callback function (sensorId) when a node is clicked
    */
   init(geoJsonData, onSelect) {
-  this.map = new maplibregl.Map({
-    container: this.containerId,
-    style: {
-      version: 8,
-      sources: {
-        'esri-ocean': {
-          type: 'raster',
-          tiles: ['https://server.arcgisonline.com/ArcGIS/rest/services/Ocean/World_Ocean_Base/MapServer/tile/{z}/{y}/{x}'],
-          tileSize: 256,
-          attribution: 'Tiles © Esri'
-        }
+    this.pendingGeoJSON = geoJsonData;
+
+    this.map = new maplibregl.Map({
+      container: this.containerId,
+      style: {
+        version: 8,
+        sources: {
+          'esri-ocean': {
+            type: 'raster',
+            tiles: ['https://server.arcgisonline.com/ArcGIS/rest/services/Ocean/World_Ocean_Base/MapServer/tile/{z}/{y}/{x}'],
+            tileSize: 256,
+            attribution: 'Tiles © Esri'
+          }
+        },
+        layers: [{ id: 'ocean-basemap', type: 'raster', source: 'esri-ocean' }]
       },
-      layers: [{ id: 'ocean-basemap', type: 'raster', source: 'esri-ocean' }]
-    },
-    center: [-123.25, 48.50],
-    zoom: 9.5,
-    pitch: 40,
-    bearing: -10
-  });
+      center: [-123.25, 48.50],
+      zoom: 9.5,
+      pitch: 40,
+      bearing: -10
+    });
 
-  this.map.addControl(new maplibregl.NavigationControl(), 'top-right');
+    this.map.addControl(new maplibregl.NavigationControl(), 'top-right');
 
-  const setupLayers = () => {
-    // Guard against running setup twice
-    if (this.isLoaded) return;
-    this.isLoaded = true;
+    const setupLayers = () => {
+      if (this.isLoaded) return;
+      this.isLoaded = true;
 
-    const initialData = this.pendingGeoJSON || geoJsonData;
+      const initialData = this.pendingGeoJSON || geoJsonData || { type: 'FeatureCollection', features: [] };
 
-    // 1. Safe Source Initialization
-    if (!this.map.getSource('sensors')) {
-      this.map.addSource('sensors', {
-        type: 'geojson',
-        data: initialData || { type: 'FeatureCollection', features: [] }
+      // 1. Add/Update Source
+      if (!this.map.getSource('sensors')) {
+        this.map.addSource('sensors', {
+          type: 'geojson',
+          data: initialData
+        });
+      } else {
+        this.map.getSource('sensors').setData(initialData);
+      }
+
+      // 2. Add Circle Layer
+      if (!this.map.getLayer('sensors-layer')) {
+        this.map.addLayer({
+          id: 'sensors-layer',
+          type: 'circle',
+          source: 'sensors',
+          paint: {
+            'circle-radius': 7,
+            'circle-color': [
+              'match', ['get', 'type'],
+              'shred_input', '#f43f5e',
+              'shred_output', '#10b981',
+              '#38bdf8'
+            ],
+            'circle-stroke-width': 2,
+            'circle-stroke-color': '#ffffff',
+            'circle-opacity': [
+              'match', ['get', 'isSupported'],
+              1, 1.0,
+              0.25
+            ],
+            'circle-stroke-opacity': [
+              'match', ['get', 'isSupported'],
+              1, 1.0,
+              0.30
+            ]
+          }
+        });
+      }
+
+      // 3. Hover & Click Listeners
+      this.map.on('mouseenter', 'sensors-layer', () => {
+        this.map.getCanvas().style.cursor = 'pointer';
       });
-    } else if (initialData) {
-      this.map.getSource('sensors').setData(initialData);
-    }
 
-    // 2. Safe Layer Rendering
-    if (!this.map.getLayer('sensors-layer')) {
-      this.map.addLayer({
-        id: 'sensors-layer',
-        type: 'circle',
-        source: 'sensors',
-        paint: {
-          'circle-radius': 7,
-          'circle-color': [
-            'match', ['get', 'type'],
-            'shred_input', '#f43f5e',
-            'shred_output', '#10b981',
-            '#38bdf8'
-          ],
-          'circle-stroke-width': 2,
-          'circle-stroke-color': '#ffffff',
-          'circle-opacity': [
-            'match', ['get', 'isSupported'],
-            1, 1.0,
-            0.25
-          ],
-          'circle-stroke-opacity': [
-            'match', ['get', 'isSupported'],
-            1, 1.0,
-            0.30
-          ]
+      this.map.on('mouseleave', 'sensors-layer', () => {
+        this.map.getCanvas().style.cursor = '';
+      });
+
+      this.map.on('click', 'sensors-layer', (e) => {
+        if (!e.features || e.features.length === 0) return;
+        const clickedSensorId = e.features[0].properties.id;
+        if (typeof onSelect === 'function') {
+          onSelect(clickedSensorId);
         }
       });
-    }
 
-    // 3. Hover & Click Listeners
-    this.map.on('mouseenter', 'sensors-layer', () => {
-      this.map.getCanvas().style.cursor = 'pointer';
-    });
-    
-    this.map.on('mouseleave', 'sensors-layer', () => {
-      this.map.getCanvas().style.cursor = '';
-    });
+      console.log('[MapManager] Sensor layer successfully attached to canvas.');
+    };
 
-    this.map.on('click', 'sensors-layer', (e) => {
-      if (!e.features || e.features.length === 0) return;
-      const clickedSensorId = e.features[0].properties.id;
-      if (typeof onSelect === 'function') {
-        onSelect(clickedSensorId);
+    // Attach listeners directly to MapLibre initialization lifecycle
+    this.map.on('load', setupLayers);
+
+    // Fail-safe: If style loads or idle event fires first, force layer setup
+    this.map.on('styledata', () => {
+      if (this.map.isStyleLoaded()) {
+        setupLayers();
       }
     });
-  };
-
-  // --- THE RACE CONDITION FIX ---
-  // If the map or style is ALREADY loaded (common on fast local refresh or cached loads),
-  // invoke setupLayers immediately instead of waiting for an event that already passed!
-  if (this.map.loaded() || this.map.isStyleLoaded()) {
-    setupLayers();
-  } else {
-    // Listen to both load and style.load to ensure execution regardless of style load order
-    this.map.once('load', setupLayers);
-    this.map.once('style.load', setupLayers);
-  }
   }
 
   /**

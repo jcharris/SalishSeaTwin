@@ -1,6 +1,6 @@
 export class DataModule {
   constructor() {
-    this.sensors = {};
+    this.sensors = null;
     this.telemetry = { nodes: {} };
     this.isInitialized = false;
   }
@@ -22,24 +22,14 @@ export class DataModule {
       this.sensors = await sensorsRes.json();
       this.telemetry = await telemetryRes.json();
       this.isInitialized = true;
+      
+      console.log('[DataModule] Data successfully loaded and parsed.');
     } catch (err) {
-      console.error('DataModule Initialization Error:', err);
-      // Fallback empty structures to prevent hard crashes
-      this.sensors = {};
-      this.telemetry = { nodes: {} };
+      console.error('[DataModule] Initialization Error:', err);
+      // DO NOT set empty objects here, or getSensorsGeoJSON will generate 0 features silently!
+      this.isInitialized = false;
+      throw err; // Re-throw so app.js knows initialization failed!
     }
-  }
-
-  /**
-   * Normalizes `this.sensors` into a flat Array regardless of incoming structure
-   */
-  _getSensorList() {
-    if (!this.sensors) return [];
-    if (Array.isArray(this.sensors)) return this.sensors;
-    if (Array.isArray(this.sensors.sensors)) return this.sensors.sensors;
-    if (Array.isArray(this.sensors.nodes)) return this.sensors.nodes;
-    if (typeof this.sensors === 'object') return Object.values(this.sensors);
-    return [];
   }
 
   /**
@@ -48,74 +38,80 @@ export class DataModule {
    * @param {string} variableKey - e.g. 'twl', 'temp', 'salinity'
    */
   getSensorsGeoJSON(variableKey = null) {
-  if (!this.sensors) {
-    console.warn('[DataModule] Sensors data is empty!');
-    return { type: 'FeatureCollection', features: [] };
-  }
+    if (!this.sensors) {
+      console.warn('[DataModule] Sensors data is empty or not initialized yet!');
+      return { type: 'FeatureCollection', features: [] };
+    }
 
-  // Convert raw object dictionary { "SS_SEATTLE": {...} } or array into key-value entries
-  let entries = [];
-  if (Array.isArray(this.sensors)) {
-    entries = this.sensors.map(item => [item.id || item.node_id, item]);
-  } else if (this.sensors.type === 'FeatureCollection' && Array.isArray(this.sensors.features)) {
-    entries = this.sensors.features.map(f => [f.properties?.id || f.id, f]);
-  } else if (typeof this.sensors === 'object') {
-    entries = Object.entries(this.sensors);
-  }
+    // Convert raw object dictionary { "SS_SEATTLE": {...} } or array into key-value entries
+    let entries = [];
+    if (Array.isArray(this.sensors)) {
+      entries = this.sensors.map(item => [item.id || item.node_id, item]);
+    } else if (this.sensors.type === 'FeatureCollection' && Array.isArray(this.sensors.features)) {
+      entries = this.sensors.features.map(f => [f.properties?.id || f.id, f]);
+    } else if (typeof this.sensors === 'object') {
+      entries = Object.entries(this.sensors);
+    }
 
-  const features = entries.map(([key, sensor]) => {
-    // 1. Handle GeoJSON Feature format
-    if (sensor && sensor.type === 'Feature') {
-      const props = sensor.properties || {};
-      const vars = props.variables || [];
+    const features = entries.map(([key, sensor]) => {
+      // 1. Handle GeoJSON Feature format
+      if (sensor && sensor.type === 'Feature') {
+        const props = sensor.properties || {};
+        const vars = props.variables || [];
+        const isSupported = variableKey ? (vars.includes(variableKey) ? 1 : 0) : 1;
+
+        return {
+          type: 'Feature',
+          geometry: sensor.geometry,
+          properties: {
+            ...props,
+            id: props.id || key,
+            name: props.name || key,
+            type: props.type || 'default',
+            variables: vars,
+            isSupported: isSupported
+          }
+        };
+      }
+
+      // 2. Handle plain JSON object format
+      const vars = sensor?.variables || sensor?.vars || [];
       const isSupported = variableKey ? (vars.includes(variableKey) ? 1 : 0) : 1;
+
+      // Flexible coordinate lookup
+      const lng = Number(
+        sensor?.longitude ?? sensor?.lng ?? sensor?.lon ?? sensor?.coordinates?.[0] ?? sensor?.location?.[0] ?? NaN
+      );
+      const lat = Number(
+        sensor?.latitude ?? sensor?.lat ?? sensor?.coordinates?.[1] ?? sensor?.location?.[1] ?? NaN
+      );
+
+      // Skip invalid coordinates
+      if (isNaN(lng) || isNaN(lat)) {
+        console.warn(`[DataModule] Invalid coordinates for sensor: ${key}`);
+        return null;
+      }
 
       return {
         type: 'Feature',
-        geometry: sensor.geometry,
+        geometry: {
+          type: 'Point',
+          coordinates: [lng, lat]
+        },
         properties: {
-          ...props,
-          id: props.id || key,
-          name: props.name || key,
-          type: props.type || 'default',
+          id: sensor?.id || sensor?.node_id || key,
+          name: sensor?.name || key,
+          type: sensor?.type || 'default',
           variables: vars,
           isSupported: isSupported
         }
       };
-    }
-
-    // 2. Handle plain JSON object format
-    const vars = sensor?.variables || sensor?.vars || [];
-    const isSupported = variableKey ? (vars.includes(variableKey) ? 1 : 0) : 1;
-
-    // Flexible coordinate lookup
-    const lng = Number(
-      sensor?.longitude ?? sensor?.lng ?? sensor?.lon ?? sensor?.coordinates?.[0] ?? sensor?.location?.[0] ?? 0
-    );
-    const lat = Number(
-      sensor?.latitude ?? sensor?.lat ?? sensor?.coordinates?.[1] ?? sensor?.location?.[1] ?? 0
-    );
+    }).filter(Boolean); // Clean out null entries
 
     return {
-      type: 'Feature',
-      geometry: {
-        type: 'Point',
-        coordinates: [lng, lat]
-      },
-      properties: {
-        id: sensor?.id || sensor?.node_id || key,
-        name: sensor?.name || key,
-        type: sensor?.type || 'default',
-        variables: vars,
-        isSupported: isSupported
-      }
+      type: 'FeatureCollection',
+      features: features
     };
-  });
-
-  return {
-    type: 'FeatureCollection',
-    features: features
-  };
   }
 
   /**
