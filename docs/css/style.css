@@ -48,7 +48,7 @@ body, html {
 #variable-selector {
   position: absolute; 
   top: 15px; 
-  right: 50px; 
+  right: 15px; 
   z-index: 100;
   display: flex; 
   gap: 4px; 
@@ -75,25 +75,26 @@ body, html {
 }
 
 /* ==========================================================================
-   TIME CONTROLLER (SINGLE BAR + INTERACTIVE PICKER)
+   TIME CONTROLLER (TOP-CENTERED FLOATING BAR)
    ========================================================================== */
 #time-controller,
 .time-bar-container {
   position: absolute;
-  bottom: 24px;
+  top: 15px;
   left: 50%;
   transform: translateX(-50%);
-  z-index: 1000;
+  z-index: 2500; /* Stays above map and chart drawer */
   display: flex;
   align-items: center;
   gap: 10px;
-  background: rgba(15, 23, 42, 0.9);
-  backdrop-filter: blur(10px);
+  background: rgba(15, 23, 42, 0.92);
+  backdrop-filter: blur(12px);
   border: 1px solid #334155;
   padding: 8px 16px;
   border-radius: 30px;
-  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
-  max-width: 90vw;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.6);
+  width: calc(100% - 32px);
+  max-width: 540px;
   box-sizing: border-box;
 }
 
@@ -117,6 +118,7 @@ body, html {
 .step-controls {
   display: flex;
   gap: 4px;
+  flex-shrink: 0;
 }
 
 .time-btn:hover, 
@@ -130,28 +132,33 @@ body, html {
   accent-color: #0284c7;
   cursor: pointer;
   flex-grow: 1;
-  min-width: 140px;
+  min-width: 80px;
   height: 6px;
 }
 
 .time-picker-wrapper {
   position: relative;
   display: inline-block;
+  flex-shrink: 0;
 }
 
 .time-badge {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
   color: #38bdf8;
   background: #0f172a;
-  padding: 6px 12px;
+  padding: 5px 10px;
   border-radius: 16px;
   border: 1px solid #0284c7;
   white-space: nowrap;
   cursor: pointer;
   transition: background 0.2s ease;
   user-select: none;
+  max-width: 170px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: block;
 }
 
 .time-badge:hover {
@@ -177,10 +184,10 @@ body, html {
   bottom: 0; 
   left: 0; 
   right: 0; 
-  z-index: 2000;
+  z-index: 1500;
   background: rgba(15, 23, 42, 0.96); 
   color: #f8fafc; 
-  padding: 14px 16px 20px 16px;
+  padding: 12px 16px 16px 16px;
   border-top-left-radius: 20px; 
   border-top-right-radius: 20px;
   border-top: 1px solid rgba(255, 255, 255, 0.2); 
@@ -189,6 +196,7 @@ body, html {
   transition: transform 0.3s ease-out;
   box-shadow: 0 -10px 30px rgba(0,0,0,0.7);
   box-sizing: border-box;
+  max-height: 55vh;
 }
 
 #chart-drawer.active { 
@@ -226,11 +234,50 @@ body, html {
 #chart-box, 
 .chart-box { 
   width: 100%; 
-  height: 250px; 
-  min-height: 250px;
+  height: 260px; 
+  min-height: 220px;
   position: relative; 
   cursor: crosshair; 
   background: #0f172a; 
   border-radius: 8px;
   overflow: hidden;
+}
+
+/* ==========================================================================
+   MAP TOOLTIPS & RESPONSIVE MOBILE OVERRIDES
+   ========================================================================== */
+.sensor-tooltip {
+  background: #0f172a !important;
+  border: 1px solid #0284c7 !important;
+  color: #f8fafc !important;
+  font-weight: 600;
+  font-size: 11px;
+  border-radius: 6px;
+  padding: 3px 8px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+}
+
+@media (max-width: 600px) {
+  #time-controller {
+    flex-wrap: wrap;
+    justify-content: center;
+    border-radius: 16px;
+    padding: 10px;
+    top: 60px; /* Moves below variable selector on mobile */
+  }
+
+  .time-picker-wrapper {
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    margin-top: 4px;
+  }
+
+  .time-badge {
+    max-width: 100%;
+    text-align: center;
+  }
+
+  #variable-selector { right: 15px; }
+  #time-slider { min-width: 60px; }
 }
