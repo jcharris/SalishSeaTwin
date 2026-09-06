@@ -53,6 +53,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       ? rawGeoJSON 
       : { type: 'FeatureCollection', features: [] };
 
+    // Sensor click callback explicitly opens chart drawer
     mapManager.init(initialGeoJSON, (sensorId, coords) => {
       appState.selectedNodeId = sensorId;
       appState.selectedCoords = coords;
@@ -76,9 +77,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 });
 
-/**
- * Formats coordinates into standard geographic format (e.g. 47.606° N, 122.332° W)
- */
 function formatCoords(coords) {
   if (!coords || coords.length < 2) return '';
   const [lng, lat] = coords;
@@ -91,7 +89,8 @@ function updateChart(openDrawer = false) {
   const drawer = document.getElementById('chart-drawer');
   
   if (drawer && openDrawer) {
-    drawer.classList.add('active');
+      drawer.classList.add('active');
+      drawer.dataset.justOpened = 'true';
   }
 
   const series = dataModule.getSeries(appState.selectedNodeId, appState.currentVariable);
@@ -105,7 +104,6 @@ function updateChart(openDrawer = false) {
     appState.currentHour = timeController.getCurrentHour();
   }
 
-  // Set concise title and clear unnecessary subtitle text
   const titleEl = document.getElementById('drawer-title');
   const subEl = document.getElementById('drawer-sub');
   
@@ -117,7 +115,7 @@ function updateChart(openDrawer = false) {
   }
   
   if (subEl) {
-    subEl.textContent = ''; // Removed redundant subtitle
+    subEl.textContent = '';
     subEl.style.display = 'none';
   }
 
@@ -149,6 +147,7 @@ function setupVariableSelectors() {
   const buttons = document.querySelectorAll('.var-btn');
   buttons.forEach(btn => {
     btn.addEventListener('click', (e) => {
+      e.stopPropagation(); // Prevents top variable buttons from triggering map close events
       const target = e.currentTarget;
       buttons.forEach(b => b.classList.remove('active'));
       target.classList.add('active');
@@ -165,14 +164,63 @@ function setupVariableSelectors() {
   });
 }
 
+/**
+ * Fixed Drawer Close Controls:
+ * - Direct close button click
+ * - Ignores sensor node clicks (allows drawer to open)
+ * - Ignores clicks on time dock & variable controls
+ * - Dismisses drawer when clicking blank map space or outside background
+ */
 function setupDrawerControls() {
   const closeBtn = document.getElementById('close-drawer-btn');
+  const drawer = document.getElementById('chart-drawer');
+
+  const closeDrawer = () => {
+    if (drawer && drawer.classList.contains('active')) {
+      drawer.classList.remove('active');
+    }
+  };
+
   if (closeBtn) {
-    closeBtn.addEventListener('click', () => {
-      const drawer = document.getElementById('chart-drawer');
-      if (drawer) drawer.classList.remove('active');
+    closeBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      closeDrawer();
     });
   }
+
+  document.addEventListener('click', (e) => {
+    if (!drawer || !drawer.classList.contains('active')) return;
+
+    // Direct element targets
+    const isInsideDrawer = drawer.contains(e.target);
+    const isFloatingTimeWidget = e.target.closest('#time-controller');
+    const isVariableSelector = e.target.closest('#variable-selector');
+    
+    // Check if a station/sensor point was clicked on the map
+    const isMapCanvas = e.target.classList.contains('maplibregl-canvas');
+
+    // If the click is inside the drawer, or on UI controls, do nothing
+    if (isInsideDrawer || isFloatingTimeWidget || isVariableSelector) {
+      return;
+    }
+
+    // If clicking on map canvas, defer 50ms so mapManager's node-click handler 
+    // can set the node and open the drawer before we decide to close it.
+    if (isMapCanvas) {
+      setTimeout(() => {
+        // Only close if no node update occurred in this click cycle
+        if (!drawer.dataset.justOpened) {
+          closeDrawer();
+        } else {
+          delete drawer.dataset.justOpened;
+        }
+      }, 50);
+      return;
+    }
+
+    // Clicked anywhere else outside
+    closeDrawer();
+  });
 }
 
 if ('serviceWorker' in navigator && window.location.hostname !== 'localhost') {

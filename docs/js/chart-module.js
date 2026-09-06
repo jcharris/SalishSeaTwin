@@ -28,31 +28,30 @@ export class ChartModule {
 
     this.chart = echarts.init(this.container, 'dark', { useUTC: true });
 
-    // Click listener to update global time controller and red line position
-    // Replace chart.on('click') with this zr click handler in chart-module.js
-this.chart.getZr().on('click', (params) => {
-  const pointInPixel = [params.offsetX, params.offsetY];
-  if (this.chart.containPixel('grid', pointInPixel)) {
-    // Convert click position to timestamp value
-    const pointInGrid = this.chart.convertFromPixel({ seriesIndex: 0 }, pointInPixel);
-    const clickedTimestamp = pointInGrid[0];
+    // Exact canvas-level click mapping to update time cursor on rapid taps
+    this.chart.getZr().on('click', (params) => {
+      if (!this.timestamps || this.timestamps.length === 0) return;
 
-    // Find nearest timestamp index in data
-    let closestIndex = 0;
-    let minDiff = Infinity;
-    this.timestamps.forEach((ts, idx) => {
-      const diff = Math.abs(ts - clickedTimestamp);
-      if (diff < minDiff) {
-        minDiff = diff;
-        closestIndex = idx;
+      const pointInPixel = [params.offsetX, params.offsetY];
+      if (this.chart.containPixel('grid', pointInPixel)) {
+        const pointInGrid = this.chart.convertFromPixel({ seriesIndex: 0 }, pointInPixel);
+        const clickedTimestamp = pointInGrid[0];
+
+        let closestIndex = 0;
+        let minDiff = Infinity;
+        this.timestamps.forEach((ts, idx) => {
+          const diff = Math.abs(ts - clickedTimestamp);
+          if (diff < minDiff) {
+            minDiff = diff;
+            closestIndex = idx;
+          }
+        });
+
+        if (typeof this.onPointClick === 'function') {
+          this.onPointClick(closestIndex);
+        }
       }
     });
-
-    if (typeof this.onPointClick === 'function') {
-      this.onPointClick(closestIndex);
-    }
-  }
-});
 
     window.addEventListener('resize', () => {
       if (this.chart) this.chart.resize();
@@ -106,7 +105,6 @@ this.chart.getZr().on('click', (params) => {
           const date = new Date(pt.value[0]);
           const dateStr = `${date.toLocaleString('en-US', { month: 'short', timeZone: 'UTC' })} ${String(date.getUTCDate()).padStart(2, '0')}, ${date.getUTCFullYear()} ${String(date.getUTCHours()).padStart(2, '0')}:00 UTC`;
           const valStr = typeof pt.value[1] === 'number' ? pt.value[1].toFixed(2) : pt.value[1];
-          // Fixed: Display `${nodeId}` directly without prepending redundant "Node "
           return `<strong style="color: #38bdf8;">${nodeId}</strong><br/>${dateStr}<br/>${varLabel}: <b>${valStr} ${unit}</b>`;
         }
       },
@@ -167,10 +165,6 @@ this.chart.getZr().on('click', (params) => {
     });
   }
 
-  /**
-   * Updates the vertical line position.
-   * If hourIndex falls outside the bounds of the current dataset, hides the line completely.
-   */
   updateCursor(hourIndex = 0) {
     if (!this.chart || !this.timestamps || this.timestamps.length === 0) return;
 
@@ -180,7 +174,6 @@ this.chart.getZr().on('click', (params) => {
     const isOutOfBounds = hourIndex < 0 || hourIndex >= this.timestamps.length;
     const targetMs = !isOutOfBounds ? this.timestamps[hourIndex] : null;
 
-    // Show line ONLY if within active time domain
     const markLineData = (targetMs && targetMs >= minTime && targetMs <= maxTime) 
       ? [{ xAxis: targetMs }] 
       : [];

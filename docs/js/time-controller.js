@@ -30,52 +30,68 @@ export class TimeController {
     // Slider Drag / Scrub Listener
     this.slider.addEventListener('input', (e) => this.sync(e.target.value));
 
-    // Step Backward Listener
+    // Step Backward
     if (this.stepBackBtn) {
       this.stepBackBtn.addEventListener('click', (e) => {
         e.preventDefault();
+        e.stopPropagation();
         this.sync(this.getCurrentHour() - 1);
       });
     }
 
-    // Step Forward Listener
+    // Step Forward
     if (this.stepFwdBtn) {
       this.stepFwdBtn.addEventListener('click', (e) => {
         e.preventDefault();
+        e.stopPropagation();
         this.sync(this.getCurrentHour() + 1);
       });
     }
 
-    // Native Date/Time Picker Trigger with Hourly Auto-Rounding
-    if (this.picker) {
-      if (this.readout) {
-        this.readout.addEventListener('click', () => {
+    // Direct Click on Time Readout Badge Opens the Picker
+    if (this.readout && this.picker) {
+      this.readout.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        try {
           if (typeof this.picker.showPicker === 'function') {
             this.picker.showPicker();
           } else {
             this.picker.focus();
             this.picker.click();
           }
-        });
-      }
+        } catch (err) {
+          this.picker.click();
+        }
+      });
 
-      // Handler that converts picked time into UTC and rounds to the nearest hour
+      // Handle user picking a new date/time or clicking Clear ("Effacer")
       const handlePickerSelection = (e) => {
-        if (!e.target.value) return;
+        e.stopPropagation();
+        const val = e.target.value;
 
-        // Parse picked time strictly as UTC
-        const pickedDate = new Date(e.target.value + ':00Z');
+        // If user cleared the input ("effacer"), reset picker value back to current active time
+        if (!val) {
+          this.sync(this.getCurrentHour());
+          return;
+        }
 
-        // Snap minutes to nearest hour (:30 or greater rounds up)
+        const parts = val.split('T');
+        if (parts.length !== 2) return;
+
+        const [datePart, timePart] = parts;
+        const [year, month, day] = datePart.split('-').map(Number);
+        const [hours, minutes] = timePart.split(':').map(Number);
+
+        const pickedDate = new Date(Date.UTC(year, month - 1, day, hours, minutes || 0, 0));
+        if (isNaN(pickedDate.getTime())) return;
+
         if (pickedDate.getUTCMinutes() >= 30) {
           pickedDate.setUTCHours(pickedDate.getUTCHours() + 1);
         }
         pickedDate.setUTCMinutes(0, 0, 0);
 
-        // Calculate hour offset from start
         const diffHours = Math.round((pickedDate.getTime() - this.startTime.getTime()) / (1000 * 60 * 60));
-        
-        // Sync UI with rounded hour
         this.sync(diffHours);
       };
 
@@ -87,11 +103,12 @@ export class TimeController {
     if (this.playBtn) {
       this.playBtn.addEventListener('click', (e) => {
         e.preventDefault();
+        e.stopPropagation();
         this.togglePlay();
       });
     }
 
-    // Force initial formatted sync immediately on init
+    // Initial sync
     this.sync(this.slider.value || 0);
   }
 
@@ -99,9 +116,6 @@ export class TimeController {
     return parseInt(this.slider ? this.slider.value : 0, 10);
   }
 
-  /**
-   * Formats a Date object strictly to "MMM DD, YYYY — HH:00 UTC"
-   */
   formatUTCString(dateObj) {
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     const month = months[dateObj.getUTCMonth()];
@@ -112,11 +126,7 @@ export class TimeController {
     return `${month} ${day}, ${year} — ${hours}:00 UTC`;
   }
 
-  /**
-   * Synchronizes timeline state across controls and readout
-   */
   sync(hour) {
-    // Clamp hours to valid timeline range
     const h = Math.max(0, Math.min(parseInt(hour, 10) || 0, this.totalHours));
 
     if (this.slider && this.slider.value !== String(h)) {
@@ -125,18 +135,18 @@ export class TimeController {
 
     const current = new Date(this.startTime.getTime() + h * 3600000);
 
-    // 1. Single consistent string format for text readout
+    // Update readout text
     if (this.readout) {
       this.readout.textContent = `${this.formatUTCString(current)} 📅`;
     }
 
-    // 2. Format ISO date string for standard datetime-local picker value (YYYY-MM-DDTHH:mm)
+    // Update datetime-local input string (YYYY-MM-DDTHH:mm)
     if (this.picker) {
       const year = current.getUTCFullYear();
       const monthNum = String(current.getUTCMonth() + 1).padStart(2, '0');
       const day = String(current.getUTCDate()).padStart(2, '0');
       const hours = String(current.getUTCHours()).padStart(2, '0');
-      
+
       this.picker.value = `${year}-${monthNum}-${day}T${hours}:00`;
     }
 
