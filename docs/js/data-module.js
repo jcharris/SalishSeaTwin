@@ -120,17 +120,19 @@ export class DataModule {
    * @param {string} variableKey - e.g. 'twl'
    * @returns {Array<number>} Array of values across total hours
    */
-  getSeries(sensorId, variableKey) {
-    if (!this.telemetry) return [];
-    
-    // Support both { nodes: { SS_SEATTLE: { ... } } } and { SS_SEATTLE: { ... } }
-    const nodes = this.telemetry.nodes || this.telemetry;
-    const nodeData = nodes[sensorId];
+  getSeries(nodeId, variable) {
+  if (!this.telemetry) return [];
+  const nodeData = this.telemetry.nodes?.[nodeId] || this.telemetry[nodeId];
+  if (!nodeData) return [];
 
-    if (!nodeData || !nodeData[variableKey]) {
-      return [];
-    }
+  // Check alias fallbacks (e.g., 'temp' -> 'temperature' or 'sst')
+  const varKey = (variable === 'temp') 
+    ? (nodeData.temp ? 'temp' : (nodeData.temperature ? 'temperature' : 'sst'))
+    : variable;
 
-    return nodeData[variableKey];
+  const rawSeries = nodeData[varKey] || nodeData.variables?.[varKey];
+  if (!rawSeries || !Array.isArray(rawSeries)) return [];
+
+  return rawSeries.map(item => (typeof item === 'object' && item !== null ? item.value : item));
   }
 }

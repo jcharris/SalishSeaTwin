@@ -41,31 +41,47 @@ document.addEventListener('DOMContentLoaded', async () => {
     // 1. Fetch sensor metadata and telemetry datasets FIRST
     await dataModule.initialize();
 
-    // 2. Safely extract initial GeoJSON
-    const initialGeoJSON = dataModule.getSensorsGeoJSON(appState.currentVariable);
+    // 2. Safe resolution of default node ID
+    const telemetryObj = dataModule.telemetry?.nodes || dataModule.telemetry || {};
+    const availableNodes = Object.keys(telemetryObj);
     
-    // Fallback log if features are empty
-    if (!initialGeoJSON || !initialGeoJSON.features || initialGeoJSON.features.length === 0) {
-      console.warn('[App] Warning: GeoJSON has zero features on boot!');
+    if (availableNodes.length > 0 && !availableNodes.includes(appState.selectedNodeId)) {
+      console.log(`[App] Initializing node selection to: ${availableNodes[0]}`);
+      appState.selectedNodeId = availableNodes[0];
     }
 
-    // 3. Initialize Map with Sensor GeoJSON and click callback
+    // 3. Fallback to valid GeoJSON structure
+    const rawGeoJSON = dataModule.getSensorsGeoJSON(appState.currentVariable);
+    const initialGeoJSON = (rawGeoJSON && rawGeoJSON.features) 
+      ? rawGeoJSON 
+      : { type: 'FeatureCollection', features: [] };
+
+    if (initialGeoJSON.features.length === 0) {
+      console.warn('[App] GeoJSON features empty on boot — map mounting with empty layer.');
+    }
+
+    // 4. Initialize Map (Pass true to open drawer on click)
     mapManager.init(initialGeoJSON, (sensorId) => {
       appState.selectedNodeId = sensorId;
-      updateChart();
+      updateChart(true);
     });
 
-    // 4. Initialize Time Controller
+    // 5. Initialize Time Controller
     timeController = new TimeController((hour) => {
       appState.currentHour = hour;
       chartModule.updateCursor(hour);
+      
+      if (typeof mapManager.updateTimeIndex === 'function') {
+        mapManager.updateTimeIndex(hour);
+      }
     });
 
-    // 5. Bind Variable Switcher Buttons
+    // 6. Bind UI Controls
     setupVariableSelectors();
+    setupDrawerControls();
 
-    // 6. Render Initial Chart
-    updateChart();
+    // 7. Initial Data Sync (keep drawer closed on boot)
+    updateChart(false);
 
   } catch (err) {
     console.error('[App] Critical startup failure:', err);
@@ -74,14 +90,58 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 /**
  * Refresh Chart Drawer View
+ * @param {boolean} openDrawer - Whether to explicitly expand the drawer container
  */
-function updateChart() {
+function updateChart(openDrawer = false) {
+  const drawer = document.getElementById('chart-drawer');
+  
+  if (drawer && openDrawer) {
+    drawer.classList.add('active');
+  }
+
   const series = dataModule.getSeries(appState.selectedNodeId, appState.currentVariable);
   const unit = variableUnits[appState.currentVariable] || '';
   const label = variableLabels[appState.currentVariable] || appState.currentVariable.toUpperCase();
 
-  chartModule.render(series, appState.selectedNodeId, label, unit);
+  const startTime = dataModule.telemetry?.start_time;
+  const timestamps = dataModule.telemetry?.timestamps || generateHourlyTimestamps(series.length, startTime);
+
+  if (timeController && typeof timeController.getCurrentHour === 'function') {
+    appState.currentHour = timeController.getCurrentHour();
+  }
+
+  // Update Drawer Headers
+  const titleEl = document.getElementById('drawer-title');
+  const subEl = document.getElementById('drawer-sub');
+  if (titleEl) titleEl.textContent = `${appState.selectedNodeId} — ${label}`;
+  if (subEl) subEl.textContent = `Telemetry values in ${unit}`;
+
+  // Render chart
+  chartModule.render(series, appState.selectedNodeId, label, unit, timestamps);
   chartModule.updateCursor(appState.currentHour);
+
+  // Force chart layout recalculation if drawer just opened
+  if (openDrawer && chartModule.chart) {
+    requestAnimationFrame(() => {
+      setTimeout(() => {
+        chartModule.chart.resize();
+      }, 50);
+    });
+  }
+}
+
+/**
+ * Generates ISO timestamp strings starting from telemetry.start_time
+ */
+function generateHourlyTimestamps(count, startTimeStr) {
+  const baseTimeStr = startTimeStr || '2026-09-01T00:00:00Z';
+  const startMs = Date.parse(baseTimeStr);
+  
+  const timestamps = [];
+  for (let i = 0; i < count; i++) {
+    timestamps.push(new Date(startMs + i * 3600000).toISOString());
+  }
+  return timestamps;
 }
 
 /**
@@ -93,14 +153,11 @@ function setupVariableSelectors() {
     btn.addEventListener('click', (e) => {
       const target = e.currentTarget;
 
-      // Toggle active CSS class
       buttons.forEach(b => b.classList.remove('active'));
       target.classList.add('active');
 
-      // Update state variable key
       appState.currentVariable = target.dataset.var;
 
-      // Update HUD status label
       const unit = variableUnits[appState.currentVariable] || '';
       const label = variableLabels[appState.currentVariable] || appState.currentVariable;
       
@@ -109,20 +166,36 @@ function setupVariableSelectors() {
         statusEl.textContent = `Active Layer: ${label} (${unit})`;
       }
 
-      // Update map nodes (dims nodes that don't support this variable)
       const updatedGeoJSON = dataModule.getSensorsGeoJSON(appState.currentVariable);
       mapManager.updateSensors(updatedGeoJSON);
 
-      // Refresh Chart
-      updateChart();
+      // Refresh chart without forcing drawer open
+      const drawer = document.getElementById('chart-drawer');
+      const isDrawerOpen = drawer ? drawer.classList.contains('active') : false;
+      updateChart(isDrawerOpen);
     });
   });
 }
 
 /**
- * Safe Service Worker Registration (No Auto-Reload Loop)
+ * Drawer Close Button Events
  */
-if ('serviceWorker' in navigator) {
+function setupDrawerControls() {
+  const closeBtn = document.getElementById('close-drawer-btn');
+  if (closeBtn) {
+    closeBtn.addEventListener('click', () => {
+      const drawer = document.getElementById('chart-drawer');
+      if (drawer) {
+        drawer.classList.remove('active');
+      }
+    });
+  }
+}
+
+/**
+ * Safe Service Worker Registration
+ */
+if ('serviceWorker' in navigator && window.location.hostname !== 'localhost') {
   window.addEventListener('load', async () => {
     try {
       await navigator.serviceWorker.register('./sw.js');

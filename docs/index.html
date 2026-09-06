@@ -2,15 +2,19 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>Salish Sea DT</title>
-  
-  <link rel="manifest" href="manifest.json">
-  <meta name="theme-color" content="#020617">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Salish Sea Oceanographic Twin</title>
 
-  <script src="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js"></script>
-  <link href="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css" rel="stylesheet" />
+  <!-- 1. Stylesheets -->
   <link rel="stylesheet" href="css/style.css">
+  <link href="https://unpkg.com/maplibre-gl@3.6.0/dist/maplibre-gl.css" rel="stylesheet" />
+
+  <!-- 2. Global External Libraries (MUST load before ES modules) -->
+  <script src="https://unpkg.com/maplibre-gl@3.6.0/dist/maplibre-gl.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
+
+  <!-- 3. Application Entry Module -->
+  <script type="module" src="js/app.js?v=1.0.3"></script>
 </head>
 <body>
 
@@ -32,34 +36,35 @@
   </div>
 
   <!-- Bottom Time Control Dock -->
-  <div id="time-controller">
-    <div class="range-header">
-      <span class="range-label">Dataset: Sep 1 – Sep 3 (Hourly)</span>
-      <input type="datetime-local" id="exact-picker" class="exact-picker"
-             step="3600" min="2026-09-01T00:00" max="2026-09-03T23:00" value="2026-09-01T00:00">
-    </div>
+  <div id="time-controller" class="time-bar-container">
+  <button id="play-btn" class="time-btn" title="Play/Pause">▶</button>
+  
+  <div class="step-controls">
+    <button id="step-back-btn" class="time-btn-step" title="Previous Hour">&lsaquo;</button>
+    <button id="step-fwd-btn" class="time-btn-step" title="Next Hour">&rsaquo;</button>
+  </div>
 
-    <div class="slider-row">
-      <button class="play-btn" id="play-btn">▶</button>
-      <input type="range" id="time-slider" class="time-slider" min="0" max="71" step="1" value="0">
-    </div>
+  <input type="range" id="time-slider" min="0" max="71" value="0" step="1">
 
-    <div class="time-readout" id="time-readout">2026-09-01 00:00 UTC</div>
+  <!-- Interactive UTC Readout Badge with Picker Overlay -->
+  <div class="time-picker-wrapper">
+  <span id="time-readout" class="time-badge">Sep 01, 2026 — 00:00 UTC 📅</span>
+  <input type="datetime-local" id="exact-picker" class="hidden-picker" step="3600">
+</div>
   </div>
 
   <!-- Contextual Chart Drawer -->
   <div id="chart-drawer">
-    <div class="drawer-header">
-      <div>
-        <div class="drawer-title" id="sensor-title">Node Telemetry</div>
-        <div class="drawer-sub" id="sensor-meta">Water Level (m)</div>
-      </div>
-      <button class="close-btn" id="close-drawer">✕</button>
+  <div class="drawer-header">
+    <div>
+      <div class="drawer-title" id="drawer-title">Station Data</div>
+      <div class="drawer-sub" id="drawer-sub">Select variable to view</div>
     </div>
-    
-    <div class="chart-box" id="chart-box">
-      <!-- Container populated dynamically by chart-module.js -->
-    </div>
+    <button class="close-btn" id="close-drawer-btn">&times;</button>
+  </div>
+  
+  <!-- MUST match id="chart-box" -->
+  <div id="chart-box" class="chart-box"></div>
   </div>
 
   <!-- Floating Update Banner -->
