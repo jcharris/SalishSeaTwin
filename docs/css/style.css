@@ -1,11 +1,12 @@
 /* ==========================================================================
-   GLOBAL RESET & MAP CANVAS
+   1. GLOBAL RESET & MAP CANVAS
    ========================================================================== */
 body, html { 
   margin: 0; 
   padding: 0; 
   width: 100vw; 
   height: 100vh; 
+  height: 100dvh; /* Mobile browser dynamic viewport support */
   overflow: hidden; 
   background: #020617; 
   font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif; 
@@ -15,6 +16,7 @@ body, html {
   position: relative;
   width: 100vw;
   height: 100vh;
+  height: 100dvh; /* Adapts when mobile browser URL bar hides/shows */
   overflow: hidden;
 }
 
@@ -26,7 +28,7 @@ body, html {
 }
 
 /* ==========================================================================
-   UI HUD OVERLAYS
+   2. UI HUD OVERLAYS
    ========================================================================== */
 #ui-panel {
   position: absolute; 
@@ -72,9 +74,9 @@ body, html {
   background: transparent; 
   border: none; 
   color: #94a3b8;
-  padding: 4px 8px; 
+  padding: 6px 10px; 
   border-radius: 6px; 
-  font-size: 10px; 
+  font-size: 11px; 
   font-weight: 600;
   cursor: pointer; 
   transition: all 0.2s ease-in-out;
@@ -86,13 +88,14 @@ body, html {
 }
 
 /* ==========================================================================
-   TIME CONTROLLER (BOTTOM-CENTER FLOATING MAP DOCK)
+   3. TIME CONTROLLER (FLOATING DOCK WITH MOBILE BROWSER PADDING)
    ========================================================================== */
 #time-controller,
 .time-bar-container,
 .floating-time-widget {
   position: absolute;
-  bottom: 24px;
+  /* Lifted above Android/iOS browser navigation bars & home indicators */
+  bottom: calc(20px + env(safe-area-inset-bottom));
   left: 50%;
   transform: translateX(-50%);
   top: auto;
@@ -118,13 +121,13 @@ body, html {
   border: 1px solid #475569;
   color: #38bdf8;
   border-radius: 50%;
-  width: 32px;
-  height: 32px;
+  width: 36px;
+  height: 36px;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 13px;
+  font-size: 14px;
   transition: all 0.2s ease;
   flex-shrink: 0;
 }
@@ -165,7 +168,7 @@ body, html {
   font-weight: 600;
   color: #38bdf8;
   background: #0f172a;
-  padding: 5px 12px;
+  padding: 6px 12px;
   border-radius: 16px;
   border: 1px solid #0284c7;
   white-space: nowrap;
@@ -190,6 +193,8 @@ body, html {
 #exact-picker,
 .time-picker-input {
   position: absolute;
+  bottom: 100%; /* Anchor above the widget so picker opens upwards on mobile */
+  left: 0;
   opacity: 0;
   width: 0;
   height: 0;
@@ -200,7 +205,7 @@ body, html {
 }
 
 /* ==========================================================================
-   CHART DRAWER & APACHE ECHARTS CONTAINER
+   4. CHART DRAWER & APACHE ECHARTS CONTAINER
    ========================================================================== */
 #chart-drawer {
   position: absolute; 
@@ -210,7 +215,7 @@ body, html {
   z-index: 1500;
   background: rgba(15, 23, 42, 0.96); 
   color: #f8fafc; 
-  padding: 12px 16px 16px 16px;
+  padding: 12px 16px calc(16px + env(safe-area-inset-bottom)) 16px;
   border-top-left-radius: 20px; 
   border-top-right-radius: 20px;
   border-top: 1px solid rgba(255, 255, 255, 0.2); 
@@ -219,7 +224,7 @@ body, html {
   transition: transform 0.3s ease-out;
   box-shadow: 0 -10px 30px rgba(0,0,0,0.7);
   box-sizing: border-box;
-  max-height: 55vh;
+  max-height: 60vh;
 }
 
 #chart-drawer.active { 
@@ -249,7 +254,6 @@ body, html {
   color: #94a3b8; 
 }
 
-/* Accessible 44px Touch Target Close Button */
 .close-btn,
 .close-drawer-btn { 
   width: 44px;
@@ -292,7 +296,7 @@ body, html {
 }
 
 /* ==========================================================================
-   MAP TOOLTIPS & RESPONSIVE MOBILE OVERRIDES
+   5. MAP TOOLTIPS & RESPONSIVE MOBILE OVERRIDES
    ========================================================================== */
 .sensor-tooltip {
   background: #0f172a !important;
@@ -301,14 +305,14 @@ body, html {
   font-weight: 600;
   font-size: 11px;
   border-radius: 6px;
-  padding: 3px 8px;
+  padding: 4px 8px;
   box-shadow: 0 4px 12px rgba(0,0,0,0.5);
 }
 
 @media (max-width: 600px) {
   #time-controller,
   .floating-time-widget {
-    bottom: 16px;
+    bottom: calc(12px + env(safe-area-inset-bottom));
     flex-wrap: wrap;
     justify-content: center;
     border-radius: 20px;

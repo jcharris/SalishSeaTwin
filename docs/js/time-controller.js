@@ -27,8 +27,14 @@ export class TimeController {
     this.slider.min = 0;
     this.slider.max = this.totalHours;
 
-    // Slider Drag / Scrub Listener
-    this.slider.addEventListener('input', (e) => this.sync(e.target.value));
+    // Slider Scrubbing (Supports both desktop drag & mobile touch)
+    const handleSliderInput = (e) => this.sync(e.target.value);
+    this.slider.addEventListener('input', handleSliderInput);
+    this.slider.addEventListener('change', handleSliderInput);
+
+    // Prevent map pan/zoom gesture collision when dragging slider on touch screens
+    this.slider.addEventListener('touchstart', (e) => e.stopPropagation(), { passive: true });
+    this.slider.addEventListener('touchmove', (e) => e.stopPropagation(), { passive: true });
 
     // Step Backward
     if (this.stepBackBtn) {
@@ -48,29 +54,32 @@ export class TimeController {
       });
     }
 
-    // Direct Click on Time Readout Badge Opens the Picker
+    // Mobile-Safe Date/Time Picker Trigger
     if (this.readout && this.picker) {
       this.readout.addEventListener('click', (e) => {
         e.preventDefault();
         e.stopPropagation();
+        
         try {
-          if (typeof this.picker.showPicker === 'function') {
+          if ('showPicker' in HTMLInputElement.prototype) {
             this.picker.showPicker();
           } else {
             this.picker.focus();
             this.picker.click();
           }
         } catch (err) {
+          // Fallback for strict browser gesture rules
+          this.picker.focus();
           this.picker.click();
         }
       });
 
-      // Handle user picking a new date/time or clicking Clear ("Effacer")
+      // Handle user selecting a date/time or clicking Clear ("Effacer")
       const handlePickerSelection = (e) => {
         e.stopPropagation();
         const val = e.target.value;
 
-        // If user cleared the input ("effacer"), reset picker value back to current active time
+        // Reset picker back to current hour if cleared
         if (!val) {
           this.sync(this.getCurrentHour());
           return;
@@ -86,6 +95,7 @@ export class TimeController {
         const pickedDate = new Date(Date.UTC(year, month - 1, day, hours, minutes || 0, 0));
         if (isNaN(pickedDate.getTime())) return;
 
+        // Round to nearest hourly step
         if (pickedDate.getUTCMinutes() >= 30) {
           pickedDate.setUTCHours(pickedDate.getUTCHours() + 1);
         }
@@ -99,7 +109,7 @@ export class TimeController {
       this.picker.addEventListener('input', handlePickerSelection);
     }
 
-    // Play / Pause Toggle Listener
+    // Play / Pause Toggle
     if (this.playBtn) {
       this.playBtn.addEventListener('click', (e) => {
         e.preventDefault();
@@ -168,8 +178,10 @@ export class TimeController {
         this.sync(next);
       }, 600);
     } else {
-      clearInterval(this.playInterval);
-      this.playInterval = null;
+      if (this.playInterval) {
+        clearInterval(this.playInterval);
+        this.playInterval = null;
+      }
     }
   }
 }
