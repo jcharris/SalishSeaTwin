@@ -5,6 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Salish Sea Oceanographic Twin</title>
 
+  <!-- PWA & Favicon Tags -->
+  <link rel="icon" type="image/x-icon" href="favicon.ico">
+  <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+  <link rel="apple-touch-icon" href="icon-512.png">
+  <link rel="manifest" href="manifest.json">
+
   <!-- 1. Stylesheets -->
   <link rel="stylesheet" href="css/style.css">
   <link href="https://unpkg.com/maplibre-gl@3.6.0/dist/maplibre-gl.css" rel="stylesheet" />
@@ -20,7 +26,10 @@
 
   <!-- UI Info Panel -->
   <div id="ui-panel">
-    <h3>Salish Sea Digital Twin</h3>
+    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 2px;">
+      <img src="icon-192.png" alt="Salish Sea DT Logo" style="width: 22px; height: 22px; border-radius: 6px; object-fit: cover;">
+      <h3 style="margin: 0;">Salish Sea Digital Twin</h3>
+    </div>
     <p>Developed by <strong>Jeffrey Harris / ENPC</strong></p>
     <p id="layer-status" style="color: #38bdf8; margin-top: 4px;">Active Layer: Water Level (TWL)</p>
   </div>
@@ -42,8 +51,8 @@
 
       <!-- Interactive UTC Readout Badge with Nested Picker Overlay -->
       <div class="time-picker-wrapper">
-  <button id="time-readout" class="time-badge">Sep 01, 2026 — 00:00 UTC 📅</button>
-  <input type="datetime-local" id="exact-picker" class="hidden-picker" step="3600">
+        <button id="time-readout" class="time-badge">Sep 01, 2026 — 00:00 UTC 📅</button>
+        <input type="datetime-local" id="exact-picker" class="hidden-picker" step="3600">
       </div>
     </div>
   </div>
