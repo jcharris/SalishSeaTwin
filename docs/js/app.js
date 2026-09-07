@@ -34,7 +34,20 @@ const chartModule = new ChartModule('chart-box', (hourIndex) => {
     timeController.sync(hourIndex);
   }
 });
-const mapManager = new MapManager('map');
+
+// Pass telemetry reader getter to MapManager so hover can resolve live metric values
+const mapManager = new MapManager('map', {
+  getValue: (nodeId) => {
+    const series = dataModule.getSeries(nodeId, appState.currentVariable);
+    if (!series || !series.length) return null;
+    return series[appState.currentHour] ?? null;
+  },
+  getVariableDetails: () => ({
+    label: variableLabels[appState.currentVariable] || appState.currentVariable.toUpperCase(),
+    unit: variableUnits[appState.currentVariable] || ''
+  })
+});
+
 let timeController = null;
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -89,8 +102,8 @@ function updateChart(openDrawer = false) {
   const drawer = document.getElementById('chart-drawer');
   
   if (drawer && openDrawer) {
-      drawer.classList.add('active');
-      drawer.dataset.justOpened = 'true';
+    drawer.classList.add('active');
+    drawer.dataset.justOpened = 'true';
   }
 
   const series = dataModule.getSeries(appState.selectedNodeId, appState.currentVariable);
@@ -165,11 +178,7 @@ function setupVariableSelectors() {
 }
 
 /**
- * Fixed Drawer Close Controls:
- * - Direct close button click
- * - Ignores sensor node clicks (allows drawer to open)
- * - Ignores clicks on time dock & variable controls
- * - Dismisses drawer when clicking blank map space or outside background
+ * Drawer Close Controls with Node Glow Deselection:
  */
 function setupDrawerControls() {
   const closeBtn = document.getElementById('close-drawer-btn');
@@ -178,6 +187,10 @@ function setupDrawerControls() {
   const closeDrawer = () => {
     if (drawer && drawer.classList.contains('active')) {
       drawer.classList.remove('active');
+    }
+    // Deselect feature-state glow on map
+    if (typeof mapManager.deselectNode === 'function') {
+      mapManager.deselectNode();
     }
   };
 
@@ -191,24 +204,17 @@ function setupDrawerControls() {
   document.addEventListener('click', (e) => {
     if (!drawer || !drawer.classList.contains('active')) return;
 
-    // Direct element targets
     const isInsideDrawer = drawer.contains(e.target);
     const isFloatingTimeWidget = e.target.closest('#time-controller');
     const isVariableSelector = e.target.closest('#variable-selector');
-    
-    // Check if a station/sensor point was clicked on the map
     const isMapCanvas = e.target.classList.contains('maplibregl-canvas');
 
-    // If the click is inside the drawer, or on UI controls, do nothing
     if (isInsideDrawer || isFloatingTimeWidget || isVariableSelector) {
       return;
     }
 
-    // If clicking on map canvas, defer 50ms so mapManager's node-click handler 
-    // can set the node and open the drawer before we decide to close it.
     if (isMapCanvas) {
       setTimeout(() => {
-        // Only close if no node update occurred in this click cycle
         if (!drawer.dataset.justOpened) {
           closeDrawer();
         } else {
@@ -218,7 +224,6 @@ function setupDrawerControls() {
       return;
     }
 
-    // Clicked anywhere else outside
     closeDrawer();
   });
 }
