@@ -85,6 +85,19 @@ export class MapManager {
         this.map.getSource('sensors').setData(initialData);
       }
 
+      // 0. MOBILE HITBOX LAYER: Invisible wide tap target (48px diameter)
+      if (!this.map.getLayer('sensors-touch-hitbox')) {
+        this.map.addLayer({
+          id: 'sensors-touch-hitbox',
+          type: 'circle',
+          source: 'sensors',
+          paint: {
+            'circle-radius': 24, // Generous target for fingers/thumbs
+            'circle-opacity': 0  // Invisible
+          }
+        });
+      }
+
       // 1. UNDERLAY LAYER: Bright Pulsing Glow Ring
       if (!this.map.getLayer('sensors-glow-layer')) {
         this.map.addLayer({
@@ -93,9 +106,11 @@ export class MapManager {
           source: 'sensors',
           paint: {
             'circle-radius': [
-              'case',
-              ['boolean', ['feature-state', 'selected'], false], 22,
-              0
+              'interpolate',
+              ['linear'],
+              ['zoom'],
+              6,  ['case', ['boolean', ['feature-state', 'selected'], false], 12, 0],
+              12, ['case', ['boolean', ['feature-state', 'selected'], false], 22, 0]
             ],
             'circle-color': '#38bdf8',
             'circle-opacity': [
@@ -108,17 +123,20 @@ export class MapManager {
         });
       }
 
-      // 2. MAIN LAYER: Bold, High-Visibility Sensor Markers
+      // 2. MAIN LAYER: Bold, High-Visibility Sensor Markers (Zoom-Responsive Sizing)
       if (!this.map.getLayer('sensors-layer')) {
         this.map.addLayer({
           id: 'sensors-layer',
           type: 'circle',
           source: 'sensors',
           paint: {
+            // Scales radius based on map zoom: smaller when zoomed out, larger zoomed in
             'circle-radius': [
-              'case',
-              ['boolean', ['feature-state', 'selected'], false], 14,
-              10
+              'interpolate',
+              ['linear'],
+              ['zoom'],
+              6,  ['case', ['boolean', ['feature-state', 'selected'], false], 8, 4],
+              12, ['case', ['boolean', ['feature-state', 'selected'], false], 14, 9]
             ],
             'circle-color': [
               'match', ['get', 'type'],
@@ -151,7 +169,7 @@ export class MapManager {
       }
 
       // Hover Tooltip Display with Live Metric Fetch
-      this.map.on('mouseenter', 'sensors-layer', (e) => {
+      const showTooltip = (e) => {
         this.map.getCanvas().style.cursor = 'pointer';
 
         if (e.features.length > 0) {
@@ -194,15 +212,21 @@ export class MapManager {
 
           this.tooltip.setLngLat(coordinates).setHTML(html).addTo(this.map);
         }
-      });
+      };
 
-      this.map.on('mouseleave', 'sensors-layer', () => {
+      const hideTooltip = () => {
         this.map.getCanvas().style.cursor = '';
         this.tooltip.remove();
-      });
+      };
 
-      // Click event for selecting nodes
-      this.map.on('click', 'sensors-layer', (e) => {
+      // Register tooltips for both visible markers and the invisible touch layer
+      this.map.on('mouseenter', 'sensors-layer', showTooltip);
+      this.map.on('mouseleave', 'sensors-layer', hideTooltip);
+      this.map.on('mouseenter', 'sensors-touch-hitbox', showTooltip);
+      this.map.on('mouseleave', 'sensors-touch-hitbox', hideTooltip);
+
+      // Handle selection clicks on the wide hitbox layer so mobile touches are easily caught
+      const handleSelectNode = (e) => {
         if (!e.features || e.features.length === 0) return;
         const clickedFeature = e.features[0];
         const clickedSensorId = clickedFeature.properties.id;
@@ -212,7 +236,9 @@ export class MapManager {
         if (typeof onSelect === 'function') {
           onSelect(clickedSensorId, clickedFeature.geometry.coordinates, clickedFeature.properties);
         }
-      });
+      };
+
+      this.map.on('click', 'sensors-touch-hitbox', handleSelectNode);
     };
 
     this.map.on('load', setupLayers);
